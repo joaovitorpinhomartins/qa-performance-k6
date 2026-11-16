@@ -5,7 +5,7 @@ Testes de performance com **k6** sobre o sistema de estoque e aplicação de fer
 O foco é definir limites aceitáveis, simular uma carga realista do domínio e **analisar os resultados**,
 apontando gargalos, e não só gerar números.
 
-> Em construção. Os cenários são adicionados em etapas (veja o roteiro abaixo).
+> Em construção. Os cenários são adicionados em etapas (veja o roteiro no final).
 
 ## Pré-requisitos
 
@@ -13,7 +13,7 @@ apontando gargalos, e não só gerar números.
 - Node.js 18 ou superior, para subir a aplicação sob teste
 - A aplicação do repositório [qa-estoque-fertilizantes](https://github.com/joaovitorpinhomartins/qa-estoque-fertilizantes)
 
-## Como rodar (previsto)
+## Como rodar
 
 1. Em outro terminal, suba a aplicação sob teste:
 
@@ -30,7 +30,25 @@ npm start
 k6 run k6/scenarios/smoke.js
 ```
 
-Por padrão os scripts apontam para `http://localhost:3000`.
+Por padrão os scripts apontam para `http://localhost:3000`. O smoke roda 30 segundos com 1 usuário
+e termina com um resumo das métricas e dos limites (thresholds). Se algum limite for violado,
+o k6 encerra com código de erro, o que também serve de critério no CI.
+
+> **Atenção:** a preparação dos dados reinicia a aplicação (`POST /test/reset`) e cria fertilizantes e fazendas.
+> Use apenas contra a aplicação de teste, nunca contra um ambiente real.
+
+### Configuração
+
+Os valores abaixo podem ser trocados com `-e NOME=valor`, por exemplo
+`k6 run -e FAZENDAS=50 k6/scenarios/smoke.js`.
+
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `BASE_URL` | `http://localhost:3000` | Endereço da aplicação |
+| `FAZENDAS` | `20` | Fazendas criadas na preparação (os usuários virtuais se distribuem entre elas) |
+| `ESTOQUE_INICIAL` | `1000000` | Estoque inicial de cada fertilizante |
+| `RESETAR_DADOS` | `true` | Reinicia os dados da aplicação antes do teste |
+| `PAUSA_MIN` / `PAUSA_MAX` | `1` / `3` | Pausa entre ações de um usuário virtual, em segundos |
 
 ## Tipos de teste
 
@@ -48,7 +66,7 @@ Por padrão os scripts apontam para `http://localhost:3000`.
 
 ## Estrutura
 
-- `k6/lib/`: configuração, preparação de dados e funções comuns
+- `k6/lib/`: configuração, preparação de dados, operações (uma função por requisição) e limites (SLOs)
 - `k6/scenarios/`: os cenários de teste
 - `docs/`: plano de performance e análise dos resultados
 - `results/`: relatórios gerados localmente (não versionados)
@@ -56,11 +74,11 @@ Por padrão os scripts apontam para `http://localhost:3000`.
 
 ## Roteiro
 
-1. Estrutura, README e plano de performance
-2. Preparação de dados e funções comuns
-3. Smoke
-4. Load com limites (thresholds)
-5. Stress e análise do ponto de ruptura
-6. Spike e soak
-7. CI com relatório HTML
-8. Análise dos resultados
+- [x] Estrutura, README e plano de performance
+- [x] Preparação de dados e funções comuns
+- [x] Smoke
+- [ ] Load com limites (thresholds)
+- [ ] Stress e análise do ponto de ruptura
+- [ ] Spike e soak
+- [ ] CI com relatório HTML
+- [ ] Análise dos resultados

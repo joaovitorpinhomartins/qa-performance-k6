@@ -54,8 +54,10 @@ Os valores serão refinados depois do smoke e do primeiro load.
 - No início de cada execução, o script reinicia a aplicação (`POST /test/reset`) e cria fertilizantes
   com estoque alto e várias fazendas, para o estoque não acabar durante o teste.
 - Cada usuário virtual usa a própria fazenda e pivô, para não esbarrar no bloqueio de pivô.
-- Respostas de negócio esperadas não contam como falha. Falha é erro de servidor, timeout ou
-  resposta inesperada.
+- Os dados preparados evitam rejeições de regra de negócio (saldo insuficiente e bloqueio de pivô).
+  Por isso qualquer resposta 4xx ou 5xx, timeout ou resposta fora do esperado conta como falha.
+- As operações são identificadas pela tag `operacao`, o que permite um limite e uma análise por operação.
+- Os usuários virtuais emitem pedidos terrestres no primeiro pivô da sua fazenda e agendam os próprios pedidos.
 
 ## Hipóteses a verificar
 - **H1**: a aplicação verifica os pedidos vencidos a cada requisição, percorrendo todos os pedidos.
