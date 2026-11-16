@@ -1,0 +1,7 @@
+# Resultados de execução (relatórios relevantes são copiados para docs/ na análise)
+results/*
+!results/.gitkeep
+
+*.log
+.DS_Store
+Thumbs.db
