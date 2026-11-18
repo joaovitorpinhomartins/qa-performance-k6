@@ -26,6 +26,9 @@ de pedidos, agendamento e consulta de relatórios gerenciais). Cada usuário vir
 
 Os pesos são uma proposta inicial e podem ser ajustados com dados reais de uso.
 
+O agendamento só ocorre quando o usuário virtual tem um pedido pendente emitido por ele mesmo.
+Se não tiver, ele emite um pedido no lugar (situação rara depois das primeiras ações).
+
 ## Limites aceitáveis (SLOs)
 
 | Grupo | Critério |
@@ -43,12 +46,17 @@ Valores propostos para o projeto. Em um sistema real, seriam acordados com o neg
 | Tipo | Perfil inicial | Observação |
 |---|---|---|
 | Smoke | 1 usuário, 30 segundos | Valida o script e a aplicação |
-| Load | Sobe até 20 usuários e mantém por 5 minutos | Carga esperada, com os SLOs como critério |
-| Stress | Sobe em degraus até os limites serem violados | Encontra o ponto de ruptura |
+| Load | Sobe até 20 usuários em 1 minuto, mantém por 5 minutos e desce em 30 segundos | Carga esperada, com os SLOs como critério |
+| Stress | Degraus de 20, 50, 100, 200 e 300 usuários, 1 minuto cada, com pausas de 0,3 a 0,8 s | Encontra o ponto de ruptura. Cada degrau tem a tag `nivel`, o que permite comparar os níveis |
 | Spike | De 10 para 150 usuários em 10 segundos | Reação a pico repentino |
 | Soak (curto) | 10 usuários por 15 minutos | Estabilidade ao longo do tempo |
 
-Os valores serão refinados depois do smoke e do primeiro load.
+No stress, as pausas são mais curtas que no load para aumentar a pressão: cada usuário passa a gerar
+cerca de 1,8 requisição por segundo. É esperado que os limites sejam violados nos níveis mais altos.
+O ponto de ruptura é o primeiro nível em que o p95 ou a taxa de falhas ultrapassa o limite, ou em que a
+vazão deixa de crescer (saturação).
+
+Os valores serão refinados depois dos primeiros resultados.
 
 ## Dados e estado
 - No início de cada execução, o script reinicia a aplicação (`POST /test/reset`) e cria fertilizantes
@@ -70,6 +78,8 @@ Os valores serão refinados depois do smoke e do primeiro load.
 - Taxa de falhas e de checks
 - Requisições por segundo e usuários virtuais
 - Evolução da latência ao longo do teste (para confirmar ou refutar H1)
+- Métricas próprias: `pedidos_emitidos` (total emitido), `pedidos_listados` (quantos pedidos cada listagem devolveu)
+  e `bytes_lista_pedidos` (tamanho da resposta), que medem o acúmulo de dados (H1 e H2)
 
 ## Entregáveis
 - Cenários em `k6/scenarios/`

@@ -1,13 +1,19 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import { Counter, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
-import { BASE_URL } from './config.js';
+import { BASE_URL, HTTP_TIMEOUT } from './config.js';
 import { dataEmDias } from './datas.js';
 
 const CABECALHOS_JSON = { 'Content-Type': 'application/json' };
 
+// Métricas próprias, usadas para relacionar a latência com o volume de pedidos acumulados.
+const pedidosEmitidos = new Counter('pedidos_emitidos');
+const pedidosListados = new Trend('pedidos_listados'); // quantos pedidos a listagem devolveu
+const bytesListaPedidos = new Trend('bytes_lista_pedidos'); // tamanho da resposta, em bytes
+
 // A tag "operacao" separa as métricas de cada operação e permite um limite para cada uma.
-const comTag = (operacao, extra = {}) => ({ tags: { operacao }, ...extra });
+const comTag = (operacao, extra = {}) => ({ tags: { operacao }, timeout: HTTP_TIMEOUT, ...extra });
 
 export function consultarEstoque() {
   const res = http.get(`${BASE_URL}/fertilizantes`, comTag('consultar_estoque'));
@@ -20,10 +26,15 @@ export function consultarEstoque() {
 
 export function consultarPedidos() {
   const res = http.get(`${BASE_URL}/pedidos`, comTag('consultar_pedidos'));
+  const lista = res.status === 200 ? res.json() : null;
   check(res, {
     'consultar pedidos: status 200': (r) => r.status === 200,
-    'consultar pedidos: devolve uma lista': (r) => Array.isArray(r.json()),
+    'consultar pedidos: devolve uma lista': () => Array.isArray(lista),
   });
+  if (Array.isArray(lista)) {
+    pedidosListados.add(lista.length);
+    bytesListaPedidos.add(res.body.length);
+  }
   return res;
 }
 
@@ -61,6 +72,7 @@ export function emitirPedido(dados) {
     'emitir pedido: status 201': (r) => r.status === 201,
     'emitir pedido: pedido pendente': (r) => r.status === 201 && r.json().status === 'pendente',
   });
+  if (ok) pedidosEmitidos.add(1);
   return ok ? res.json().id : null;
 }
 
