@@ -2,47 +2,72 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
-import { BASE_URL, HTTP_TIMEOUT } from './config.js';
+import { BASE_URL, HTTP_TIMEOUT, LISTAGEM_AMOSTRA } from './config.js';
 import { dataEmDias } from './datas.js';
 
 const CABECALHOS_JSON = { 'Content-Type': 'application/json' };
 
-// Métricas próprias, usadas para relacionar a latência com o volume de pedidos acumulados.
+// Métricas próprias, usadas para relacionar a latência com o volume de pedidos acumulados
+// e para entender os tipos de falha.
 const pedidosEmitidos = new Counter('pedidos_emitidos');
-const pedidosListados = new Trend('pedidos_listados'); // quantos pedidos a listagem devolveu
+const pedidosListados = new Trend('pedidos_listados'); // quantos pedidos a listagem devolveu (amostrado)
 const bytesListaPedidos = new Trend('bytes_lista_pedidos'); // tamanho da resposta, em bytes
+const falhasSemResposta = new Counter('falhas_sem_resposta'); // tempo esgotado ou conexão recusada/interrompida
+const falhasHttp = new Counter('falhas_http'); // respostas 4xx e 5xx
+const emissoesSemConfirmacao = new Counter('emissoes_sem_confirmacao'); // pedido enviado, resposta não recebida
+
+// Tags extras aplicadas a todas as requisições seguintes (por exemplo, o nível do experimento).
+let tagsExtras = {};
+export function definirTags(tags) {
+  tagsExtras = tags;
+}
 
 // A tag "operacao" separa as métricas de cada operação e permite um limite para cada uma.
-const comTag = (operacao, extra = {}) => ({ tags: { operacao }, timeout: HTTP_TIMEOUT, ...extra });
+const comTag = (operacao, extra = {}) => ({
+  tags: { operacao, ...tagsExtras },
+  timeout: HTTP_TIMEOUT,
+  ...extra,
+});
+
+function registrarFalha(res) {
+  if (res.status === 0) falhasSemResposta.add(1);
+  else if (res.status >= 400) falhasHttp.add(1);
+}
 
 export function consultarEstoque() {
   const res = http.get(`${BASE_URL}/fertilizantes`, comTag('consultar_estoque'));
+  registrarFalha(res);
   check(res, {
     'consultar estoque: status 200': (r) => r.status === 200,
-    'consultar estoque: devolve uma lista': (r) => Array.isArray(r.json()),
+    'consultar estoque: devolve uma lista': (r) => r.status === 200 && r.body.charAt(0) === '[',
   });
   return res;
 }
 
+let consultasDeListagem = 0;
+
 export function consultarPedidos() {
   const res = http.get(`${BASE_URL}/pedidos`, comTag('consultar_pedidos'));
-  const lista = res.status === 200 ? res.json() : null;
+  registrarFalha(res);
+  const ehLista = res.status === 200 && res.body.charAt(0) === '[';
   check(res, {
     'consultar pedidos: status 200': (r) => r.status === 200,
-    'consultar pedidos: devolve uma lista': () => Array.isArray(lista),
+    'consultar pedidos: devolve uma lista': () => ehLista,
   });
-  if (Array.isArray(lista)) {
-    pedidosListados.add(lista.length);
+  if (ehLista) {
     bytesListaPedidos.add(res.body.length);
+    // Interpretar a lista inteira é caro (chega a 1 MB), então só 1 a cada LISTAGEM_AMOSTRA consultas.
+    if (consultasDeListagem++ % LISTAGEM_AMOSTRA === 0) pedidosListados.add(res.json().length);
   }
   return res;
 }
 
 export function relatorioDemanda() {
   const res = http.get(`${BASE_URL}/relatorios/demanda`, comTag('relatorio_demanda'));
+  registrarFalha(res);
   check(res, {
     'relatório: status 200': (r) => r.status === 200,
-    'relatório: devolve uma lista': (r) => Array.isArray(r.json()),
+    'relatório: devolve uma lista': (r) => r.status === 200 && r.body.charAt(0) === '[',
   });
   return res;
 }
@@ -68,6 +93,8 @@ export function emitirPedido(dados) {
     JSON.stringify(corpo),
     comTag('emitir_pedido', { headers: CABECALHOS_JSON }),
   );
+  registrarFalha(res);
+  if (res.status === 0) emissoesSemConfirmacao.add(1);
   const ok = check(res, {
     'emitir pedido: status 201': (r) => r.status === 201,
     'emitir pedido: pedido pendente': (r) => r.status === 201 && r.json().status === 'pendente',
@@ -83,6 +110,7 @@ export function agendarPedido(pedidoId) {
     JSON.stringify({ dataAplicacao: dataEmDias(7) }),
     comTag('agendar_pedido', { headers: CABECALHOS_JSON }),
   );
+  registrarFalha(res);
   return check(res, {
     'agendar pedido: status 200': (r) => r.status === 200,
     'agendar pedido: pedido agendado': (r) => r.status === 200 && r.json().status === 'agendado',

@@ -28,5 +28,13 @@ export const STRESS_PAUSA_MAX = Number(__ENV.STRESS_PAUSA_MAX || 0.8);
 // Tempo máximo de espera por uma resposta. Passou disso, a requisição conta como falha.
 export const HTTP_TIMEOUT = __ENV.HTTP_TIMEOUT || '10s';
 
+// Experimento de volume: quantidade de pedidos acumulados em cada etapa (1 usuário) e amostras por operação.
+export const VOLUME_NIVEIS = (__ENV.VOLUME_NIVEIS || '0,1000,2000,4000,8000').split(',').map(Number);
+export const VOLUME_AMOSTRAS = Number(__ENV.VOLUME_AMOSTRAS || 100);
+
+// A lista de pedidos pode chegar a 1 MB. Para o k6 não gastar CPU lendo a lista inteira a cada consulta,
+// ela só é interpretada em 1 a cada LISTAGEM_AMOSTRA consultas (o tamanho da resposta é medido sempre).
+export const LISTAGEM_AMOSTRA = Number(__ENV.LISTAGEM_AMOSTRA || 25);
+
 export const PAUSA_MIN = Number(__ENV.PAUSA_MIN || 1);
 export const PAUSA_MAX = Number(__ENV.PAUSA_MAX || 3);

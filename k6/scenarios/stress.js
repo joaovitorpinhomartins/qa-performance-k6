@@ -5,6 +5,7 @@
 // acumulados POR NÍVEL. É esperado que os limites sejam violados nos níveis mais altos:
 // o objetivo é descobrir em qual.
 import { prepararDados } from '../lib/dados.js';
+import { limitesP95 } from '../lib/thresholds.js';
 import { executarOperacaoSorteada, pausar } from '../lib/jornada.js';
 import {
   STRESS_NIVEIS,
@@ -12,6 +13,10 @@ import {
   STRESS_PAUSA_MIN,
   STRESS_PAUSA_MAX,
 } from '../lib/config.js';
+
+// Operações com limite por nível: a consulta leve (mostra o custo geral da aplicação), a lista
+// de pedidos (peso da resposta) e a emissão (escrita).
+const OPERACOES_POR_NIVEL = ['consultar_estoque', 'consultar_pedidos', 'emitir_pedido'];
 
 const FOLGA_S = 5; // intervalo entre etapas, para as iterações em andamento terminarem
 const rotulo = (vus) => `vus_${String(vus).padStart(3, '0')}`;
@@ -32,8 +37,10 @@ STRESS_NIVEIS.forEach((vus, i) => {
     gracefulStop: `${FOLGA_S}s`,
     tags: { nivel },
   };
-  // Limites por nível (todas as operações juntas). São os que dizem onde o sistema quebra.
-  thresholds[`http_req_duration{nivel:${nivel}}`] = ['p(95)<500'];
+  // Limites por nível e por operação: dizem onde cada operação deixa de cumprir o SLO.
+  for (const operacao of OPERACOES_POR_NIVEL) {
+    thresholds[`http_req_duration{nivel:${nivel},operacao:${operacao}}`] = [`p(95)<${limitesP95[operacao]}`];
+  }
   thresholds[`http_req_failed{nivel:${nivel}}`] = ['rate<0.01'];
   // Limites que sempre passam: servem só para o k6 exibir estas métricas por nível.
   thresholds[`http_reqs{nivel:${nivel}}`] = ['count>=0'];

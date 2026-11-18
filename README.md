@@ -46,8 +46,10 @@ k6 run k6/scenarios/load.js
 Sobe até 20 usuários em 1 minuto, mantém por 5 minutos e desce em 30 segundos (cerca de 6,5 minutos no total).
 Cada usuário sorteia as operações conforme a mistura do plano. O teste passa se todos os limites forem atendidos.
 
-Além das métricas padrão, o teste registra `pedidos_emitidos`, `pedidos_listados` e `bytes_lista_pedidos`,
-usadas para relacionar a latência com o volume de pedidos acumulados.
+Além das métricas padrão, o teste registra `pedidos_emitidos`, `pedidos_listados` (amostrado) e `bytes_lista_pedidos`,
+usadas para relacionar a latência com o volume de pedidos acumulados, e contadores de falha por tipo:
+`falhas_sem_resposta` (tempo esgotado ou conexão recusada), `falhas_http` (respostas 4xx e 5xx) e
+`emissoes_sem_confirmacao` (pedido enviado, mas resposta não recebida).
 
 ### Stress
 
@@ -56,14 +58,27 @@ k6 run k6/scenarios/stress.js
 ```
 
 Sobe em degraus de 20, 50, 100, 200 e 300 usuários, 1 minuto cada (cerca de 5,5 minutos), com pausas curtas
-entre as ações (0,3 a 0,8 s). Cada degrau recebe a tag `nivel`, e o resumo mostra, **por nível**, o p95 da latência,
-a taxa de falhas, o total de requisições (vazão) e a quantidade de pedidos acumulados (`pedidos_listados`).
+entre as ações (0,3 a 0,8 s). Cada degrau recebe a tag `nivel`, e o resumo mostra, **por nível**, o p95 da latência
+de três operações (consulta de estoque, lista de pedidos e emissão), a taxa de falhas, o total de requisições (vazão)
+e a quantidade de pedidos acumulados (`pedidos_listados`).
 
 É **esperado** que alguns limites sejam violados nos níveis mais altos, e o k6 termina com código de erro. O objetivo
 é descobrir em qual nível isso acontece. Se mais da metade das requisições falhar, o teste é interrompido.
 
 > O stress pode deixar a máquina lenta, porque o k6 e a aplicação disputam a mesma CPU. Feche programas pesados antes
 > e, se precisar, interrompa com `Ctrl + C`.
+
+### Volume
+
+```bash
+k6 run k6/scenarios/volume.js
+```
+
+Experimento com **1 usuário e sem concorrência**: para cada nível de pedidos acumulados (0, 1.000, 2.000, 4.000 e
+8.000), o script cria os pedidos que faltam e mede 100 vezes cada operação. Como não há fila de requisições, o resultado
+isola o **custo de cada operação conforme o volume de dados cresce**. O resumo traz um limite (SLO) por nível e por
+operação, então dá para ver a partir de quantos pedidos cada operação deixa de cumprir o limite, além do tamanho da
+resposta da lista de pedidos em cada nível. Leva alguns minutos, porque cria milhares de pedidos.
 
 ### Configuração
 
@@ -84,6 +99,9 @@ Os valores abaixo podem ser trocados com `-e NOME=valor`, por exemplo
 | `STRESS_PASSO_S` | `60` | Duração de cada degrau, em segundos |
 | `STRESS_PAUSA_MIN` / `STRESS_PAUSA_MAX` | `0.3` / `0.8` | Pausa entre ações no stress, em segundos |
 | `HTTP_TIMEOUT` | `10s` | Tempo máximo de espera por uma resposta (depois disso, conta como falha) |
+| `VOLUME_NIVEIS` | `0,1000,2000,4000,8000` | Pedidos acumulados em cada etapa do experimento de volume |
+| `VOLUME_AMOSTRAS` | `100` | Medições de cada operação por etapa do experimento de volume |
+| `LISTAGEM_AMOSTRA` | `25` | A lista de pedidos só é interpretada em 1 a cada N consultas (poupa CPU do k6) |
 
 ## Tipos de teste
 
@@ -114,6 +132,7 @@ Os valores abaixo podem ser trocados com `-e NOME=valor`, por exemplo
 - [x] Smoke
 - [x] Load com limites (thresholds)
 - [x] Stress (a análise do ponto de ruptura vem com os resultados)
+- [x] Experimento de volume (custo de cada operação conforme os pedidos se acumulam)
 - [ ] Spike e soak
 - [ ] CI com relatório HTML
 - [ ] Análise dos resultados

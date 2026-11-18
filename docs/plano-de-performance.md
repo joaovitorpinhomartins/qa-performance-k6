@@ -48,6 +48,7 @@ Valores propostos para o projeto. Em um sistema real, seriam acordados com o neg
 | Smoke | 1 usuário, 30 segundos | Valida o script e a aplicação |
 | Load | Sobe até 20 usuários em 1 minuto, mantém por 5 minutos e desce em 30 segundos | Carga esperada, com os SLOs como critério |
 | Stress | Degraus de 20, 50, 100, 200 e 300 usuários, 1 minuto cada, com pausas de 0,3 a 0,8 s | Encontra o ponto de ruptura. Cada degrau tem a tag `nivel`, o que permite comparar os níveis |
+| Volume | 1 usuário, sem concorrência, com 0, 1.000, 2.000, 4.000 e 8.000 pedidos acumulados | Isola o efeito do volume de dados na latência de cada operação (H1 e H2) |
 | Spike | De 10 para 150 usuários em 10 segundos | Reação a pico repentino |
 | Soak (curto) | 10 usuários por 15 minutos | Estabilidade ao longo do tempo |
 
@@ -80,6 +81,8 @@ Os valores serão refinados depois dos primeiros resultados.
 - Evolução da latência ao longo do teste (para confirmar ou refutar H1)
 - Métricas próprias: `pedidos_emitidos` (total emitido), `pedidos_listados` (quantos pedidos cada listagem devolveu)
   e `bytes_lista_pedidos` (tamanho da resposta), que medem o acúmulo de dados (H1 e H2)
+- Contadores de falha: `falhas_sem_resposta` (tempo esgotado ou conexão recusada), `falhas_http` (4xx e 5xx) e
+  `emissoes_sem_confirmacao` (pedido enviado, mas resposta não recebida, o que pode deixar pedidos criados sem o cliente saber)
 
 ## Entregáveis
 - Cenários em `k6/scenarios/`
@@ -90,3 +93,5 @@ Os valores serão refinados depois dos primeiros resultados.
 - Ambiente local, sem isolamento entre gerador de carga e aplicação
 - Dados em memória, sem banco de dados e sem rede entre camadas
 - Perfil de uso estimado, não medido em produção
+- A lista de pedidos é interpretada pelo k6 em apenas 1 de cada 25 consultas (`LISTAGEM_AMOSTRA`), para o gerador
+  de carga não gastar CPU lendo respostas de até 1 MB. Por isso `pedidos_listados` é uma amostra, e `bytes_lista_pedidos` é medido sempre

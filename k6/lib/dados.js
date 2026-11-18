@@ -52,3 +52,28 @@ export function prepararDados() {
 
   return { fertilizantes, fazendas };
 }
+
+// Cria `quantidade` pedidos para acumular volume de dados antes de medir (experimento de volume).
+// Não conta nas métricas de nenhuma operação: usa a tag "preparacao".
+export function semearPedidos(dados, quantidade) {
+  const fazenda = dados.fazendas[0];
+  for (let i = 0; i < quantidade; i++) {
+    const fertilizante = dados.fertilizantes[i % dados.fertilizantes.length];
+    postar(
+      '/pedidos',
+      {
+        itens: [
+          {
+            fertilizanteId: fertilizante.id,
+            fazendaId: fazenda.id,
+            pivoId: fazenda.pivoId,
+            quantidade: 1,
+            tipoAplicacao: 'terrestre',
+          },
+        ],
+      },
+      201,
+    );
+  }
+  return Math.max(quantidade, 0);
+}
